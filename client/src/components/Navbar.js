@@ -1,17 +1,19 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { FiMenu, FiSun, FiMoon, FiLogOut } from 'react-icons/fi';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { Avatar } from './common';
 
 function Navbar() {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const handleLogout = () => {
     logout();
+    navigate('/login', { replace: true });
   };
 
   return (
