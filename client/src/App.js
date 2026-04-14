@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 function App() {
   const API = "https://salary-manager-app.onrender.com";   
+  console.log("API URL:", API);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loginForm, setLoginForm] = useState({
