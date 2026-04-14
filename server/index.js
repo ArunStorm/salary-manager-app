@@ -74,8 +74,8 @@ app.post("/login", (req, res) => {
   res.status(401).json({ success: false });
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT} 🚀`);
+  console.log(`Server running on port ${PORT}`);
 });
