@@ -1,0 +1,6 @@
+/**
+ * Employee Components Export
+ */
+
+export { default as EmployeeForm } from './EmployeeForm';
+export { default as EmployeeList } from './EmployeeList';

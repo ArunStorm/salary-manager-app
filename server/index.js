@@ -1,133 +1,112 @@
-const express = require("express");
-const cors = require("cors");
-const db = require("./firebase");
-const PDFDocument = require("pdfkit");
+/**
+ * Salary Management HRMS - Backend Server
+ * Express.js server with modular routes and Firebase Firestore integration
+ */
 
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const db = require('./firebase');
+
+// Middleware
+const errorHandler = require('./middleware/errorHandler');
+const authMiddleware = require('./middleware/authMiddleware');
+
+// Routes
+const authRoutes = require('./routes/auth');
+const employeeRoutes = require('./routes/employees');
+const attendanceRoutes = require('./routes/attendance');
+const salaryRoutes = require('./routes/salary');
+const payslipRoutes = require('./routes/payslip');
+const advanceSalaryRoutes = require('./routes/advanceSalary');
+
+// Initialize Express app
 const app = express();
 
-/* ================= MIDDLEWARE ================= */
-app.use(cors({
-  origin: "*"   // you can restrict later
-}));
+/* ==================== MIDDLEWARE ==================== */
+
+// CORS Configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
+
+// Body Parser
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-/* ================= TEST ROUTE ================= */
-app.get("/", (req, res) => {
-  res.send("API working 🚀");
+// Auth Middleware (to be applied to protected routes)
+// app.use(authMiddleware);
+
+/* ==================== HEALTH CHECK ROUTE ==================== */
+
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Salary Management API is running 🚀',
+    timestamp: new Date().toISOString(),
+  });
 });
 
-/* ================= EMPLOYEE APIs ================= */
+/* ==================== API ROUTES ==================== */
 
-// ✅ ADD EMPLOYEE (FIXED - THIS WAS MISSING)
-app.post("/employees", async (req, res) => {
-  try {
-    const { name, role } = req.body;
+// Authentication Routes
+app.use('/api/auth', authRoutes);
 
-    const docRef = await db.collection("employees").add({
-      name,
-      role
-    });
+// Employee Routes
+app.use('/api/employees', employeeRoutes);
 
-    res.json({
-      id: docRef.id,
-      name,
-      role
-    });
+// Attendance Routes
+app.use('/api/attendance', attendanceRoutes);
 
-  } catch (error) {
-    console.error("ERROR ADD:", error);
-    res.status(500).json({ message: "Error adding employee" });
-  }
+// Salary Routes
+app.use('/api/salary', salaryRoutes);
+
+// Payslip Routes
+app.use('/api/payslip', payslipRoutes);
+
+// Advance Salary Routes
+app.use('/api/advance-salary', advanceSalaryRoutes);
+
+/* ==================== ERROR HANDLING ==================== */
+
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    path: req.path,
+  });
 });
 
-// ✅ GET EMPLOYEES (ONLY ONE - DUPLICATE REMOVED)
-app.get("/employees", async (req, res) => {
-  try {
-    const snapshot = await db.collection("employees").get();
+// Error Handler (must be last)
+app.use(errorHandler);
 
-    res.json(snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })));
-
-  } catch (error) {
-    console.error("ERROR FETCH:", error);
-    res.status(500).json({ message: "Error fetching employees" });
-  }
-});
-
-/* ================= SALARY ================= */
-
-app.post("/employees/:id/salary", async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { month, salary, advance = 0, presentDays = 30, totalDays = 30 } = req.body;
-
-    const netSalary = (salary / totalDays) * presentDays - advance;
-
-    await db.collection("employees").doc(id)
-      .collection("salaryRecords")
-      .add({ month, salary, advance, presentDays, totalDays, netSalary });
-
-    res.json({ message: "Salary added" });
-
-  } catch (error) {
-    console.error("ERROR SALARY:", error);
-    res.status(500).json({ message: "Error adding salary" });
-  }
-});
-
-/* ================= PAYSLIP PDF ================= */
-
-app.get("/employees/:id/payslip/:salaryId", async (req, res) => {
-  try {
-    const { id, salaryId } = req.params;
-
-    const emp = (await db.collection("employees").doc(id).get()).data();
-    const salary = (await db.collection("employees").doc(id)
-      .collection("salaryRecords").doc(salaryId).get()).data();
-
-    const doc = new PDFDocument();
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "attachment; filename=payslip.pdf");
-
-    doc.pipe(res);
-
-    doc.fontSize(18).text("Salary Payslip", { align: "center" });
-    doc.moveDown();
-
-    doc.fontSize(12).text(`Employee: ${emp.name}`);
-    doc.text(`Month: ${salary.month}`);
-    doc.text(`Salary: ${salary.salary}`);
-    doc.text(`Advance: ${salary.advance}`);
-    doc.text(`Present Days: ${salary.presentDays}`);
-    doc.text(`Net Salary: ${salary.netSalary}`);
-
-    doc.end();
-
-  } catch (error) {
-    console.error("ERROR PDF:", error);
-    res.status(500).json({ message: "Error generating payslip" });
-  }
-});
-
-/* ================= LOGIN ================= */
-
-app.post("/login", (req, res) => {
-  const { username, password } = req.body;
-
-  if (username === "admin" && password === "admin123") {
-    return res.json({ success: true });
-  }
-
-  res.status(401).json({ success: false });
-});
-
-/* ================= SERVER ================= */
+/* ==================== SERVER STARTUP ==================== */
 
 const PORT = process.env.PORT || 5000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} 🚀`);
+  console.log(`
+╔══════════════════════════════════════════════════════╗
+║     Salary Management HRMS Backend - Running        ║
+╚══════════════════════════════════════════════════════╝
+
+📍 Server: http://localhost:${PORT}
+🌍 Environment: ${NODE_ENV}
+🔌 CORS Origin: ${corsOptions.origin}
+
+✨ Ready to accept connections...
+  `);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM signal received: closing HTTP server');
+  app.close(() => {
+    console.log('HTTP server closed');
+  });
 });
