@@ -6,6 +6,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../firebase');
+const authorizationMiddleware = require('../middleware/authorizationMiddleware');
 
 /**
  * GET /api/employees
@@ -40,9 +41,9 @@ router.get('/', async (req, res, next) => {
 
 /**
  * POST /api/employees
- * Create new employee
+ * Create new employee (admin only)
  */
-router.post('/', async (req, res, next) => {
+router.post('/', authorizationMiddleware('ADMIN'), async (req, res, next) => {
   try {
     const { name, email, phone, role, department, joinDate, basicSalary } = req.body;
 
@@ -126,9 +127,9 @@ router.get('/:id', async (req, res, next) => {
 
 /**
  * PUT /api/employees/:id
- * Update employee details
+ * Update employee details (admin only)
  */
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', authorizationMiddleware('ADMIN'), async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, email, phone, role, department, basicSalary, status } = req.body;
@@ -157,9 +158,9 @@ router.put('/:id', async (req, res, next) => {
 
 /**
  * DELETE /api/employees/:id
- * Soft delete employee (mark as inactive)
+ * Soft delete employee (mark as inactive) - admin only
  */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', authorizationMiddleware('ADMIN'), async (req, res, next) => {
   try {
     const { id } = req.params;
 

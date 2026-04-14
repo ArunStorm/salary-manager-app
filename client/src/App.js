@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Employees from "./pages/Employees";
 import Attendance from "./pages/Attendance";
 import Payroll from "./pages/Payroll";
+import AdminSettings from "./pages/AdminSettings";
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
                   <Route path="/employees" element={<Employees />} />
                   <Route path="/attendance" element={<Attendance />} />
                   <Route path="/payroll" element={<Payroll />} />
+                  <Route path="/admin-settings" element={<AdminSettings />} />
                 </Routes>
               </main>
             </div>

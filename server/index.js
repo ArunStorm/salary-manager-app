@@ -14,6 +14,7 @@ const authMiddleware = require('./middleware/authMiddleware');
 
 // Routes
 const authRoutes = require('./routes/auth');
+const usersRoutes = require('./routes/users');
 const employeeRoutes = require('./routes/employees');
 const attendanceRoutes = require('./routes/attendance');
 const salaryRoutes = require('./routes/salary');
@@ -54,6 +55,9 @@ app.get('/', (req, res) => {
 
 // Authentication Routes
 app.use('/api/auth', authRoutes);
+
+// Users Routes
+app.use('/api/users', usersRoutes);
 
 // Employee Routes
 app.use('/api/employees', employeeRoutes);

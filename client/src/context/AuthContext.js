@@ -1,12 +1,11 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
+import { api } from '../services/api';
 
 /**
  * Authentication Context
- * Manages mock authentication state, user role, and session persistence.
- * 
- * For MVP: Accepts any username/password without validation.
- * Token is stored in localStorage for persistence.
- * Roles: "admin" (full access) or "employee" (limited access)
+ * Manages authentication state with real backend integration
+ * Tokens are stored in localStorage for persistence
+ * Roles: "ADMIN" (full access) or "EMPLOYEE" (limited access)
  */
 export const AuthContext = createContext(null);
 
@@ -38,45 +37,35 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   /**
-   * Mock login - accepts any credentials
-   * In production: Validate against backend and get JWT token
+   * Real backend login - validates against Firestore
    */
   const login = useCallback(async (username, password) => {
     try {
       setError(null);
       setIsLoading(true);
 
-      // Mock validation: username and password must not be empty
       if (!username || !password) {
         throw new Error('Username and password are required');
       }
 
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Call backend API
+      const response = await api.post('/auth/login', { username, password });
 
-      // Determine role based on username (for demo purposes)
-      // In production: Get from backend
-      const role = username.toLowerCase() === 'admin' ? 'admin' : 'employee';
+      if (!response.success) {
+        throw new Error(response.message || 'Login failed');
+      }
 
-      const authData = {
-        id: `user_${Date.now()}`,
-        username,
-        role,
-        loginTime: new Date().toISOString(),
-      };
-
-      // Create mock token (in production: JWT from backend)
-      const token = `mock_token_${Date.now()}`;
+      const { user: userData, token } = response.data;
 
       // Store in localStorage
-      localStorage.setItem('auth', JSON.stringify(authData));
+      localStorage.setItem('auth', JSON.stringify(userData));
       localStorage.setItem('authToken', token);
 
       // Update state
-      setUser(authData);
+      setUser(userData);
       setIsAuthenticated(true);
 
-      return { success: true, user: authData };
+      return { success: true, user: userData };
     } catch (err) {
       const errorMessage = err.message || 'Login failed';
       setError(errorMessage);

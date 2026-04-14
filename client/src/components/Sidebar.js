@@ -5,10 +5,13 @@ import {
   FiDollarSign,
   FiCalendar,
   FiFileText,
+  FiSettings,
 } from 'react-icons/fi';
+import { useAuth } from '../context/AuthContext';
 
 function Sidebar() {
   const location = useLocation();
+  const { hasRole } = useAuth();
 
   const navigation = [
     { path: '/', label: 'Dashboard', icon: <FiHome /> },
@@ -17,6 +20,13 @@ function Sidebar() {
     { path: '/payroll', label: 'Payroll', icon: <FiDollarSign /> },
     { path: '/payslips', label: 'Payslips', icon: <FiFileText /> },
   ];
+
+  // Add admin settings link for admins only
+  const adminNavigation = hasRole('ADMIN')
+    ? [{ path: '/admin-settings', label: 'Admin Settings', icon: <FiSettings /> }]
+    : [];
+
+  const allNavigation = [...navigation, ...adminNavigation];
 
   const isActive = (path) => location.pathname === path;
 
@@ -30,7 +40,7 @@ function Sidebar() {
 
       <nav className="p-3">
         <ul className="list-unstyled">
-          {navigation.map((item) => (
+          {allNavigation.map((item) => (
             <li key={item.path} className="mb-2"> 
               <Link
                 to={item.path}
