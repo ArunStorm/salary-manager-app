@@ -6,7 +6,9 @@ const db = require("./firebase");
 const PDFDocument = require("pdfkit");
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: "https://salary-manager-app.vercel.app"
+}));
 app.use(express.json());
 
 app.get("/employees", async (req, res) => {
