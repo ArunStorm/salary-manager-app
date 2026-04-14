@@ -7,19 +7,6 @@
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
 
 /**
- * Parse error response and return user-friendly message
- */
-const handleErrorResponse = (response) => {
-  if (response.data && response.data.message) {
-    return response.data.message;
-  }
-  if (response.statusText) {
-    return response.statusText;
-  }
-  return 'An error occurred. Please try again.';
-};
-
-/**
  * Make API call with automatic error handling and auth token injection
  * 
  * @param {string} method - HTTP method (GET, POST, PUT, DELETE)
@@ -66,11 +53,10 @@ export const apiCall = async (method = 'GET', endpoint = '', data = null) => {
     console.error(`API Error [${method} ${endpoint}]:`, error);
     
     // Re-throw with consistent error format
-    throw {
-      message: error.message || 'Network error. Please check your connection.',
-      status: error.status,
-      isNetworkError: !error.message,
-    };
+    const apiError = new Error(error.message || 'Network error. Please check your connection.');
+    apiError.status = error.status;
+    apiError.isNetworkError = !error.message;
+    throw apiError;
   }
 };
 
@@ -81,8 +67,8 @@ export const api = {
   get: (endpoint) => apiCall('GET', endpoint),
   post: (endpoint, data) => apiCall('POST', endpoint, data),
   put: (endpoint, data) => apiCall('PUT', endpoint, data),
-  delete: (endpoint) => apiCall('DELETE', endpoint),
   patch: (endpoint, data) => apiCall('PATCH', endpoint, data),
+  delete: (endpoint) => apiCall('DELETE', endpoint),
 };
 
 export default api;

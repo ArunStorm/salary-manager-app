@@ -8,6 +8,7 @@ import moment from 'moment';
 function Attendance() {
   const [employees, setEmployees] = useState([]);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
+  // eslint-disable-next-line no-unused-vars
   const [selectedMonth, setSelectedMonth] = useState(moment());
   const [attendanceData, setAttendanceData] = useState([]);
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
@@ -17,6 +18,7 @@ function Attendance() {
   const employeesFetch = useFetch();
   const attendanceFetch = useFetch();
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadEmployees();
   }, []);
@@ -34,6 +36,7 @@ function Attendance() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedEmployee) {
       loadAttendanceForMonth();
