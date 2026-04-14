@@ -7,7 +7,7 @@ const PDFDocument = require("pdfkit");
 
 const app = express();
 app.use(cors({
-  origin: "https://salary-manager-app.vercel.app"
+  origin: "*"
 }));
 app.use(express.json());
 
