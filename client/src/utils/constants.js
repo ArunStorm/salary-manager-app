@@ -16,6 +16,14 @@ export const ROLE_LABELS = {
   employee: 'Employee',
 };
 
+// ==================== EMPLOYMENT TYPES ====================
+export const EMPLOYMENT_TYPE = {
+  PERMANENT: 'Permanent',
+  CONTRACT: 'Contract',
+  TEMPORARY: 'Temporary',
+  INTERN: 'Intern',
+};
+
 // ==================== ATTENDANCE STATUSES ====================
 export const ATTENDANCE_STATUS = {
   PRESENT: 'Present',
@@ -32,21 +40,21 @@ export const ATTENDANCE_COLORS = {
 };
 
 // ==================== SALARY COMPONENTS ====================
-export const ALLOWANCES = [
-  { id: 'hra', label: 'HRA (House Rent Allowance)', percentage: 10 },
-  { id: 'da', label: 'DA (Dearness Allowance)', percentage: 5 },
-  { id: 'conveyance', label: 'Conveyance Allowance', percentage: 0 },
-  { id: 'medical', label: 'Medical Allowance', percentage: 0 },
-  { id: 'other', label: 'Other Allowances', percentage: 0 },
-];
+export const ALLOWANCES = {
+  HRA: 'HRA (House Rent Allowance)',
+  DA: 'DA (Dearness Allowance)',
+  CONVEYANCE: 'Conveyance Allowance',
+  MEDICAL: 'Medical Allowance',
+  OTHER: 'Other Allowances',
+};
 
-export const DEDUCTIONS = [
-  { id: 'pf', label: 'PF (Provident Fund)', percentage: 12 },
-  { id: 'esi', label: 'ESI (Employee State Insurance)', percentage: 0 },
-  { id: 'tds', label: 'TDS (Tax Deducted at Source)', percentage: 0 },
-  { id: 'insurance', label: 'Insurance', percentage: 0 },
-  { id: 'loan', label: 'Loan Deduction', percentage: 0 },
-];
+export const DEDUCTIONS = {
+  PROVIDENT_FUND: 'PF (Provident Fund)',
+  ESI: 'ESI (Employee State Insurance)',
+  TDS: 'TDS (Tax Deducted at Source)',
+  INSURANCE: 'Insurance',
+  LOAN: 'Loan Deduction',
+};
 
 // ==================== PAYROLL STATUSES ====================
 export const PAYROLL_STATUS = {

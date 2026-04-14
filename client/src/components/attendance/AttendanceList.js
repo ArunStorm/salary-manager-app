@@ -1,1 +1,159 @@
-import { useEffect, useState } from 'react';\nimport { FiEdit2, FiTrash2, FiDownload } from 'react-icons/fi';\nimport { Card, Table, Badge, Modal, LoadingSpinner, EmptyState, Alert } from '../common';\nimport { API_ENDPOINTS, ATTENDANCE_STATUS } from '../../utils/constants';\nimport { api } from '../../services/api';\nimport { formatDate } from '../../utils/formatters';\nimport AttendanceForm from './AttendanceForm';\nimport moment from 'moment';\n\nfunction AttendanceList({ employeeId, month, onRefresh }) {\n  const [records, setRecords] = useState([]);\n  const [loading, setLoading] = useState(false);\n  const [error, setError] = useState(null);\n  const [selectedRecord, setSelectedRecord] = useState(null);\n  const [showForm, setShowForm] = useState(false);\n  const [deleteConfirm, setDeleteConfirm] = useState(null);\n  const [deleteLoading, setDeleteLoading] = useState(false);\n\n  useEffect(() => {\n    loadAttendance();\n  }, [employeeId, month]);\n\n  const loadAttendance = async () => {\n    if (!employeeId) return;\n    setLoading(true);\n    setError(null);\n    try {\n      const monthYear = month?.format('YYYY-MM') || moment().format('YYYY-MM');\n      const response = await api.get(`${API_ENDPOINTS.ATTENDANCE}?employeeId=${employeeId}&month=${monthYear}`);\n      setRecords(response?.data || []);\n    } catch (err) {\n      setError(err.message || 'Failed to load attendance records');\n    } finally {\n      setLoading(false);\n    }\n  };\n\n  const handleEdit = (record) => {\n    setSelectedRecord(record);\n    setShowForm(true);\n  };\n\n  const handleDelete = async () => {\n    if (!deleteConfirm) return;\n    setDeleteLoading(true);\n    try {\n      await api.delete(`${API_ENDPOINTS.ATTENDANCE}/${deleteConfirm.id}`);\n      setRecords(records.filter(r => r.id !== deleteConfirm.id));\n      setDeleteConfirm(null);\n      if (onRefresh) onRefresh();\n    } catch (err) {\n      setError(err.message || 'Failed to delete attendance');\n    } finally {\n      setDeleteLoading(false);\n    }\n  };\n\n  const handleFormSuccess = () => {\n    setShowForm(false);\n    setSelectedRecord(null);\n    loadAttendance();\n    if (onRefresh) onRefresh();\n  };\n\n  const getStatusBadgeVariant = (status) => {\n    switch (status) {\n      case ATTENDANCE_STATUS.PRESENT:\n        return 'success';\n      case ATTENDANCE_STATUS.ABSENT:\n        return 'danger';\n      case ATTENDANCE_STATUS.LEAVE:\n        return 'warning';\n      case ATTENDANCE_STATUS.HOLIDAY:\n        return 'info';\n      default:\n        return 'primary';\n    }\n  };\n\n  const calculateStats = () => {\n    if (!records.length) return { present: 0, absent: 0, leave: 0, holiday: 0 };\n    return {\n      present: records.filter(r => r.status === ATTENDANCE_STATUS.PRESENT).length,\n      absent: records.filter(r => r.status === ATTENDANCE_STATUS.ABSENT).length,\n      leave: records.filter(r => r.status === ATTENDANCE_STATUS.LEAVE).length,\n      holiday: records.filter(r => r.status === ATTENDANCE_STATUS.HOLIDAY).length,\n    };\n  };\n\n  const stats = calculateStats();\n  const totalWorkingDays = stats.present + stats.absent + stats.leave;\n  const attendancePercentage = totalWorkingDays > 0 ? Math.round((stats.present / totalWorkingDays) * 100) : 0;\n\n  if (loading) return <LoadingSpinner text=\"Loading attendance records...\" />;\n\n  return (\n    <div className=\"attendance-list\">\n      {error && <Alert type=\"error\" message={error} onDismiss={() => setError(null)} />}\n\n      {/* Statistics Cards */}\n      {records.length > 0 && (\n        <div className=\"row gap-3 mb-4\">\n          <div className=\"col-12 col-sm-6 col-lg-3\">\n            <Card>\n              <div className=\"text-center\">\n                <h6 className=\"text-secondary small\">Present</h6>\n                <h4 className=\"text-success fw-bold m-0\">{stats.present}</h4>\n              </div>\n            </Card>\n          </div>\n          <div className=\"col-12 col-sm-6 col-lg-3\">\n            <Card>\n              <div className=\"text-center\">\n                <h6 className=\"text-secondary small\">Absent</h6>\n                <h4 className=\"text-danger fw-bold m-0\">{stats.absent}</h4>\n              </div>\n            </Card>\n          </div>\n          <div className=\"col-12 col-sm-6 col-lg-3\">\n            <Card>\n              <div className=\"text-center\">\n                <h6 className=\"text-secondary small\">Leave</h6>\n                <h4 className=\"text-warning fw-bold m-0\">{stats.leave}</h4>\n              </div>\n            </Card>\n          </div>\n          <div className=\"col-12 col-sm-6 col-lg-3\">\n            <Card>\n              <div className=\"text-center\">\n                <h6 className=\"text-secondary small\">Attendance %</h6>\n                <h4 className=\"text-info fw-bold m-0\">{attendancePercentage}%</h4>\n              </div>\n            </Card>\n          </div>\n        </div>\n      )}\n\n      {/* Attendance Records Table */}\n      <Card>\n        <div className=\"d-flex justify-content-between align-items-center mb-4\">\n          <h5 className=\"m-0\">Attendance Records</h5>\n        </div>\n\n        {records.length === 0 ? (\n          <EmptyState\n            icon=\"📅\"\n            title=\"No Records\"\n            description=\"No attendance records found for this period\"\n          />\n        ) : (\n          <div className=\"table-responsive\">\n            <table className=\"table\">\n              <thead>\n                <tr>\n                  <th>Date</th>\n                  <th>Day</th>\n                  <th>Status</th>\n                  <th>Notes</th>\n                  <th style={{ textAlign: 'center' }}>Actions</th>\n                </tr>\n              </thead>\n              <tbody>\n                {records.map(record => (\n                  <tr key={record.id}>\n                    <td>\n                      <strong>{formatDate(record.date, 'DD/MM/YYYY')}</strong>\n                    </td>\n                    <td>\n                      <span className=\"text-secondary small\">\n                        {moment(record.date).format('ddd')}\n                      </span>\n                    </td>\n                    <td>\n                      <Badge variant={getStatusBadgeVariant(record.status)}>\n                        {record.status.charAt(0).toUpperCase() + record.status.slice(1)}\n                      </Badge>\n                    </td>\n                    <td>\n                      <span className=\"text-secondary small\">{record.notes || '—'}</span>\n                    </td>\n                    <td style={{ textAlign: 'center' }}>\n                      <button\n                        className=\"btn btn-sm btn-ghost text-primary\"\n                        onClick={() => handleEdit(record)}\n                        title=\"Edit\"\n                      >\n                        <FiEdit2 size={16} />\n                      </button>\n                      <button\n                        className=\"btn btn-sm btn-ghost text-danger\"\n                        onClick={() => setDeleteConfirm(record)}\n                        title=\"Delete\"\n                      >\n                        <FiTrash2 size={16} />\n                      </button>\n                    </td>\n                  </tr>\n                ))}\n              </tbody>\n            </table>\n          </div>\n        )}\n      </Card>\n\n      {/* Edit Form Modal */}\n      {showForm && (\n        <Modal\n          title={selectedRecord ? 'Edit Attendance' : 'Mark Attendance'}\n          onClose={() => {\n            setShowForm(false);\n            setSelectedRecord(null);\n          }}\n          size=\"lg\"\n        >\n          <AttendanceForm\n            employeeId={employeeId}\n            date={selectedRecord ? moment(selectedRecord.date) : moment()}\n            existingRecord={selectedRecord}\n            onSuccess={handleFormSuccess}\n            onCancel={() => {\n              setShowForm(false);\n              setSelectedRecord(null);\n            }}\n          />\n        </Modal>\n      )}\n\n      {/* Delete Confirmation Modal */}\n      {deleteConfirm && (\n        <Modal\n          title=\"Delete Attendance\"\n          onClose={() => setDeleteConfirm(null)}\n        >\n          <p className=\"mb-4\">Are you sure you want to delete this attendance record for {formatDate(deleteConfirm.date, 'DD/MM/YYYY')}?</p>\n          <div className=\"d-flex gap-2 justify-content-end\">\n            <button\n              className=\"btn btn-secondary\"\n              onClick={() => setDeleteConfirm(null)}\n              disabled={deleteLoading}\n            >\n              Cancel\n            </button>\n            <button\n              className=\"btn btn-danger\"\n              onClick={handleDelete}\n              disabled={deleteLoading}\n            >\n              {deleteLoading ? 'Deleting...' : 'Delete'}\n            </button>\n          </div>\n        </Modal>\n      )}\n    </div>\n  );\n}\n\nexport default AttendanceList;
+import { useState, useEffect } from 'react';
+import { Card, Table, Badge, Alert } from '../common';
+import { api } from '../../services/api';
+import { API_ENDPOINTS, ATTENDANCE_STATUS } from '../../utils/constants';
+import { FiEdit2, FiTrash2 } from 'react-icons/fi';
+import moment from 'moment';
+
+function AttendanceList({ employeeId, month, onRefresh }) {
+  const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    loadAttendance();
+  }, [employeeId, month]);
+
+  const loadAttendance = async () => {
+    if (!employeeId) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const monthYear = month.format('YYYY-MM');
+      const response = await api.get(
+        `${API_ENDPOINTS.ATTENDANCE}?employeeId=${employeeId}&month=${monthYear}`
+      );
+      const data = response?.data || [];
+      setRecords(data);
+      calculateStats(data);
+    } catch (err) {
+      setError('Failed to load attendance records');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateStats = (data) => {
+    const stats = {
+      present: data.filter(r => r.status === ATTENDANCE_STATUS.PRESENT).length,
+      absent: data.filter(r => r.status === ATTENDANCE_STATUS.ABSENT).length,
+      leave: data.filter(r => r.status === ATTENDANCE_STATUS.LEAVE).length,
+      holiday: data.filter(r => r.status === ATTENDANCE_STATUS.HOLIDAY).length,
+      total: data.length,
+    };
+    stats.percentage = stats.total > 0 ? ((stats.present / (stats.total - stats.holiday)) * 100).toFixed(2) : 0;
+    setStats(stats);
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this record?')) {
+      try {
+        await api.delete(`${API_ENDPOINTS.ATTENDANCE}/${id}`);
+        loadAttendance();
+        if (onRefresh) onRefresh();
+      } catch (err) {
+        setError('Failed to delete record');
+      }
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      [ATTENDANCE_STATUS.PRESENT]: 'success',
+      [ATTENDANCE_STATUS.ABSENT]: 'danger',
+      [ATTENDANCE_STATUS.LEAVE]: 'warning',
+      [ATTENDANCE_STATUS.HOLIDAY]: 'info',
+    };
+    return colors[status] || 'secondary';
+  };
+
+  const columns = [
+    {
+      key: 'date',
+      label: 'Date',
+      width: '20%',
+      render: (val) => moment(val).format('DD/MM/YYYY'),
+    },
+    {
+      key: 'status',
+      label: 'Status',
+      width: '20%',
+      render: (val) => <Badge text={val} color={getStatusColor(val)} />,
+    },
+    {
+      key: 'notes',
+      label: 'Notes',
+      width: '40%',
+      render: (val) => val || '-',
+    },
+    {
+      key: 'actions',
+      label: 'Actions',
+      width: '20%',
+      render: (_, record) => (
+        <div className="d-flex gap-2">
+          <button className="btn btn-sm btn-outline-primary">
+            <FiEdit2 size={16} />
+          </button>
+          <button
+            className="btn btn-sm btn-outline-danger"
+            onClick={() => handleDelete(record.id)}
+          >
+            <FiTrash2 size={16} />
+          </button>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="attendance-list">
+      {error && <Alert type="error" message={error} onDismiss={() => setError(null)} />}
+
+      {stats && (
+        <div className="row gap-2 mb-4">
+          <Card className="col-12">
+            <div className="d-flex justify-content-around">
+              <div className="text-center">
+                <div className="text-success" style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {stats.present}
+                </div>
+                <small className="text-muted">Present</small>
+              </div>
+              <div className="text-center">
+                <div className="text-danger" style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {stats.absent}
+                </div>
+                <small className="text-muted">Absent</small>
+              </div>
+              <div className="text-center">
+                <div className="text-warning" style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {stats.leave}
+                </div>
+                <small className="text-muted">Leave</small>
+              </div>
+              <div className="text-center">
+                <div className="text-info" style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  {stats.percentage}%
+                </div>
+                <small className="text-muted">Attendance %</small>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      <Table
+        columns={columns}
+        data={records}
+        loading={loading}
+        emptyMessage="No attendance records"
+      />
+    </div>
+  );
+}
+
+export default AttendanceList;

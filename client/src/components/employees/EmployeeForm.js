@@ -1,182 +1,226 @@
-/**
- * Employee Form Component
- * Create or edit employee information
- */
-
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useState, useEffect } from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
 import { Button, Alert } from '../common';
-import { DEPARTMENTS, VALIDATION } from '../../utils/constants';
-import { validateEmployeeForm } from '../../utils/validators';
+import { api } from '../../services/api';
+import { API_ENDPOINTS, ROLES, DEPARTMENTS, EMPLOYMENT_TYPE } from '../../utils/constants';
 
-const schema = yup.object().shape({
-  name: yup.string().required('Name is required').min(2, 'Name must be at least 2 characters'),
-  email: yup.string().email('Invalid email').required('Email is required'),
-  phone: yup.string().matches(/^\d{10}$/, 'Phone must be 10 digits'),
-  role: yup.string().required('Role is required'),
+const employeeSchema = yup.object({
+  name: yup.string().required('Name is required').min(3, 'Name must be at least 3 characters'),
+  email: yup.string().required('Email is required').email('Invalid email'),
+  phone: yup.string().required('Phone is required').min(10, 'Phone must be at least 10 digits'),
   department: yup.string().required('Department is required'),
-  joinDate: yup.date().required('Join date is required').typeError('Invalid date'),
-  basicSalary: yup.number().min(0, 'Salary must be positive').typeError('Salary must be a number'),
+  designation: yup.string().required('Designation is required'),
+  role: yup.string().required('Role is required'),
+  employmentType: yup.string().required('Employment type is required'),
+  baseSalary: yup.number().required('Base salary is required').positive('Salary must be positive'),
+  dateOfJoining: yup.string().required('Date of joining is required'),
 });
 
-function EmployeeForm({ initialData, onSubmit, onCancel, loading = false, error = null }) {
-  const [submitError, setSubmitError] = useState(error);
+function EmployeeForm({ employee, onSuccess, onCancel }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
-  } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues: initialData || {
-      name: '',
-      email: '',
-      phone: '',
-      role: '',
-      department: '',
-      joinDate: new Date().toISOString().split('T')[0],
-      basicSalary: '',
+  const { control, handleSubmit, reset, formState: { errors } } = useForm({
+    resolver: yupResolver(employeeSchema),
+    defaultValues: {
+      name: employee?.name || '',
+      email: employee?.email || '',
+      phone: employee?.phone || '',
+      department: employee?.department || '',
+      designation: employee?.designation || '',
+      role: employee?.role || ROLES.EMPLOYEE,
+      employmentType: employee?.employmentType || EMPLOYMENT_TYPE.PERMANENT,
+      baseSalary: employee?.baseSalary || 0,
+      dateOfJoining: employee?.dateOfJoining || '',
     },
   });
 
-  const handleFormSubmit = async (data) => {
-    setSubmitError(null);
+  const onSubmit = async (data) => {
+    setLoading(true);
+    setError(null);
+    setSuccess(false);
+
     try {
-      await onSubmit(data);
+      if (employee?.id) {
+        await api.put(`${API_ENDPOINTS.EMPLOYEES}/${employee.id}`, data);
+      } else {
+        await api.post(API_ENDPOINTS.EMPLOYEES, data);
+      }
+
+      setSuccess(true);
       reset();
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+      }, 1500);
     } catch (err) {
-      setSubmitError(err.message);
+      setError(err.message || 'Failed to save employee');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="p-3">
-      {submitError && (
-        <Alert type="danger" message={submitError} onClose={() => setSubmitError(null)} dismissible />
-      )}
+    <div className="employee-form">
+      {error && <Alert type="error" message={error} onDismiss={() => setError(null)} />}
+      {success && <Alert type="success" message={employee ? 'Employee updated successfully' : 'Employee created successfully'} dismissible />}
 
-      {/* Name */}
-      <div className="mb-3">
-        <label htmlFor="name" className="form-label">
-          Employee Name *
-        </label>
-        <input
-          id="name"
-          type="text"
-          className={`form-control ${errors.name ? 'is-invalid' : ''}`}
-          placeholder="Enter full name"
-          {...register('name')}
-        />
-        {errors.name && <div className="invalid-feedback">{errors.name.message}</div>}
-      </div>
+      <form onSubmit={handleSubmit(onSubmit)}>
+        <div className="row">
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Name *</label>
+              <Controller
+                name="name"
+                control={control}
+                render={({ field }) => (
+                  <input {...field} type="text" className="form-control" placeholder="Full name" />
+                )}
+              />
+              {errors.name && <p className="form-error">{errors.name.message}</p>}
+            </div>
+          </div>
 
-      {/* Email */}
-      <div className="mb-3">
-        <label htmlFor="email" className="form-label">
-          Email Address *
-        </label>
-        <input
-          id="email"
-          type="email"
-          className={`form-control ${errors.email ? 'is-invalid' : ''}`}
-          placeholder="employee@company.com"
-          {...register('email')}
-        />
-        {errors.email && <div className="invalid-feedback">{errors.email.message}</div>}
-      </div>
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Email *</label>
+              <Controller
+                name="email"
+                control={control}
+                render={({ field }) => (
+                  <input {...field} type="email" className="form-control" placeholder="email@example.com" />
+                )}
+              />
+              {errors.email && <p className="form-error">{errors.email.message}</p>}
+            </div>
+          </div>
 
-      {/* Phone */}
-      <div className="mb-3">
-        <label htmlFor="phone" className="form-label">
-          Phone Number
-        </label>
-        <input
-          id="phone"
-          type="tel"
-          className={`form-control ${errors.phone ? 'is-invalid' : ''}`}
-          placeholder="10-digit number"
-          {...register('phone')}
-        />
-        {errors.phone && <div className="invalid-feedback">{errors.phone.message}</div>}
-      </div>
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Phone *</label>
+              <Controller
+                name="phone"
+                control={control}
+                render={({ field }) => (
+                  <input {...field} type="tel" className="form-control" placeholder="10-digit phone number" />
+                )}
+              />
+              {errors.phone && <p className="form-error">{errors.phone.message}</p>}
+            </div>
+          </div>
 
-      {/* Role */}
-      <div className="mb-3">
-        <label htmlFor="role" className="form-label">
-          Role/Designation *
-        </label>
-        <input
-          id="role"
-          type="text"
-          className={`form-control ${errors.role ? 'is-invalid' : ''}`}
-          placeholder="e.g., Developer, Manager"
-          {...register('role')}
-        />
-        {errors.role && <div className="invalid-feedback">{errors.role.message}</div>}
-      </div>
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Department *</label>
+              <Controller
+                name="department"
+                control={control}
+                render={({ field }) => (
+                  <select {...field} className="form-control">
+                    <option value="">Select department</option>
+                    {DEPARTMENTS.map(dept => (
+                      <option key={dept} value={dept}>{dept}</option>
+                    ))}
+                  </select>
+                )}
+              />
+              {errors.department && <p className="form-error">{errors.department.message}</p>}
+            </div>
+          </div>
 
-      {/* Department */}
-      <div className="mb-3">
-        <label htmlFor="department" className="form-label">
-          Department *
-        </label>
-        <select
-          id="department"
-          className={`form-control ${errors.department ? 'is-invalid' : ''}`}
-          {...register('department')}
-        >
-          <option value="">Select Department</option>
-          {DEPARTMENTS.map(dept => (
-            <option key={dept} value={dept}>
-              {dept}
-            </option>
-          ))}
-        </select>
-        {errors.department && <div className="invalid-feedback">{errors.department.message}</div>}
-      </div>
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Designation *</label>
+              <Controller
+                name="designation"
+                control={control}
+                render={({ field }) => (
+                  <input {...field} type="text" className="form-control" placeholder="Job title" />
+                )}
+              />
+              {errors.designation && <p className="form-error">{errors.designation.message}</p>}
+            </div>
+          </div>
 
-      {/* Join Date */}
-      <div className="mb-3">
-        <label htmlFor="joinDate" className="form-label">
-          Joining Date *
-        </label>
-        <input
-          id="joinDate"
-          type="date"
-          className={`form-control ${errors.joinDate ? 'is-invalid' : ''}`}
-          {...register('joinDate')}
-        />
-        {errors.joinDate && <div className="invalid-feedback">{errors.joinDate.message}</div>}
-      </div>
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Base Salary *</label>
+              <Controller
+                name="baseSalary"
+                control={control}
+                render={({ field }) => (
+                  <input {...field} type="number" className="form-control" placeholder="0.00" />
+                )}
+              />
+              {errors.baseSalary && <p className="form-error">{errors.baseSalary.message}</p>}
+            </div>
+          </div>
 
-      {/* Basic Salary */}
-      <div className="mb-4">
-        <label htmlFor="basicSalary" className="form-label">
-          Basic Salary (₹)
-        </label>
-        <input
-          id="basicSalary"
-          type="number"
-          className={`form-control ${errors.basicSalary ? 'is-invalid' : ''}`}
-          placeholder="0"
-          {...register('basicSalary')}
-        />
-        {errors.basicSalary && <div className="invalid-feedback">{errors.basicSalary.message}</div>}
-      </div>
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Date of Joining *</label>
+              <Controller
+                name="dateOfJoining"
+                control={control}
+                render={({ field }) => (
+                  <input {...field} type="date" className="form-control" />
+                )}
+              />
+              {errors.dateOfJoining && <p className="form-error">{errors.dateOfJoining.message}</p>}
+            </div>
+          </div>
 
-      {/* Actions */}
-      <div className="d-flex gap-2">
-        <Button variant="primary" type="submit" loading={loading}>
-          {initialData ? 'Update Employee' : 'Add Employee'}
-        </Button>
-        <Button variant="ghost" type="button" onClick={onCancel}>
-          Cancel
-        </Button>
-      </div>
-    </form>
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Role *</label>
+              <Controller
+                name="role"
+                control={control}
+                render={({ field }) => (
+                  <select {...field} className="form-control">
+                    {Object.values(ROLES).map(role => (
+                      <option key={role} value={role}>{role}</option>
+                    ))}
+                  </select>
+                )}
+              />
+              {errors.role && <p className="form-error">{errors.role.message}</p>}
+            </div>
+          </div>
+
+          <div className="col-md-6">
+            <div className="form-group mb-3">
+              <label className="form-label">Employment Type *</label>
+              <Controller
+                name="employmentType"
+                control={control}
+                render={({ field }) => (
+                  <select {...field} className="form-control">
+                    {Object.values(EMPLOYMENT_TYPE).map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                )}
+              />
+              {errors.employmentType && <p className="form-error">{errors.employmentType.message}</p>}
+            </div>
+          </div>
+        </div>
+
+        <div className="d-flex gap-2 justify-content-end mt-4">
+          {onCancel && (
+            <Button variant="secondary" onClick={onCancel} disabled={loading}>
+              Cancel
+            </Button>
+          )}
+          <Button variant="primary" type="submit" disabled={loading}>
+            {loading ? 'Saving...' : employee ? 'Update Employee' : 'Create Employee'}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 }
 

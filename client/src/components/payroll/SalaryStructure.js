@@ -1,171 +1,103 @@
 import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { Card, Alert, Modal } from '../common';
-import { ALLOWANCES, DEDUCTIONS, API_ENDPOINTS } from '../../utils/constants';
+import * as yup from 'yup';
+import { Card, Button, Alert } from '../common';
 import { api } from '../../services/api';
+import { API_ENDPOINTS, ALLOWANCES, DEDUCTIONS } from '../../utils/constants';
 import { formatCurrency } from '../../utils/formatters';
-import { FiEdit2, FiTrash2, FiPlus, FiX } from 'react-icons/fi';
+import { FiPlus, FiTrash2 } from 'react-icons/fi';
 
 const salaryStructureSchema = yup.object({
-  basicSalary: yup.number().required('Basic salary is required').min(0, 'Must be positive'),
-  allowances: yup.object().test('has-values', 'At least one allowance required', (obj) => {
-    return obj && Object.values(obj).some(v => v > 0);
-  }),
+  baseSalary: yup.number().positive('Must be positive'),
+  allowances: yup.array().of(
+    yup.object({
+      name: yup.string().required('Name required'),
+      amount: yup.number().positive('Must be positive'),
+    })
+  ),
+  deductions: yup.array().of(
+    yup.object({
+      name: yup.string().required('Name required'),
+      amount: yup.number().positive('Must be positive'),
+    })
+  ),
 });
 
-function SalaryStructure({ employeeId, onSave }) {
-  const [structure, setStructure] = useState(null);
+function SalaryStructure({ employee, onSuccess }) {
   const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const [deductionsState, setDeductionsState] = useState({});
 
-  const {
-    control,
-    handleSubmit,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm({
+  const { control, handleSubmit, reset, watch, formState: { errors } } = useForm({
     resolver: yupResolver(salaryStructureSchema),
     defaultValues: {
-      basicSalary: 0,
-      allowances: {},
+      baseSalary: employee?.baseSalary || 0,
+      allowances: employee?.allowances || [{ name: ALLOWANCES.HRA, amount: 0 }],
+      deductions: employee?.deductions || [{ name: DEDUCTIONS.PROVIDENT_FUND, amount: 0 }],
     },
   });
 
-  const basicSalary = watch('basicSalary');
-  const allowancesValues = watch('allowances');
+  const allowances = watch('allowances') || [];
+  const deductions = watch('deductions') || [];
+  const baseSalary = watch('baseSalary') || 0;
 
-  useEffect(() => {
-    loadSalaryStructure();
-  }, [employeeId]);
-
-  const loadSalaryStructure = async () => {
-    if (!employeeId) return;
-    setLoading(true);
-    try {
-      const response = await api.get(`${API_ENDPOINTS.SALARY}/structure/${employeeId}`);
-      const data = response?.data;
-      if (data) {
-        setStructure(data);
-        reset({
-          basicSalary: data.basicSalary || 0,
-          allowances: data.allowances || {},
-        });
-        setDeductionsState(data.deductions || {});
-      }
-    } catch (err) {
-      console.error('Error loading salary structure:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const totalAllowances = allowances.reduce((sum, a) => sum + (a?.amount || 0), 0);
+  const totalDeductions = deductions.reduce((sum, d) => sum + (d?.amount || 0), 0);
+  const grossSalary = baseSalary + totalAllowances;
+  const netSalary = grossSalary - totalDeductions;
 
   const onSubmit = async (data) => {
-    setSaving(true);
+    setLoading(true);
     setError(null);
     setSuccess(false);
 
     try {
       const payload = {
-        employeeId,
-        basicSalary: data.basicSalary,
-        allowances: data.allowances,
-        deductions: deductionsState,
+        ...data,
+        grossSalary,
+        netSalary,
       };
 
-      let response;
-      if (structure?.id) {
-        response = await api.put(`${API_ENDPOINTS.SALARY}/structure/${structure.id}`, payload);
-      } else {
-        response = await api.post(`${API_ENDPOINTS.SALARY}/structure`, payload);
-      }
-
-      setStructure(response?.data);
+      await api.put(`${API_ENDPOINTS.EMPLOYEES}/${employee.id}/salary-structure`, payload);
       setSuccess(true);
-      if (onSave) onSave(response?.data);
-
-      setTimeout(() => setSuccess(false), 3000);
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+      }, 1500);
     } catch (err) {
       setError(err.message || 'Failed to save salary structure');
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   };
-
-  const handleAllowanceChange = (field, value) => {
-    control._formValues.allowances = {
-      ...control._formValues.allowances,
-      [field]: Math.max(0, value),
-    };
-  };
-
-  const handleDeductionChange = (field, value) => {
-    setDeductionsState({
-      ...deductionsState,
-      [field]: Math.max(0, value),
-    });
-  };
-
-  const calculateGrossSalary = () => {
-    const allowancesSum = Object.values(allowancesValues || {}).reduce((sum, v) => sum + (v || 0), 0);
-    return (basicSalary || 0) + allowancesSum;
-  };
-
-  const calculateNetSalary = () => {
-    const deductionsSum = Object.values(deductionsState || {}).reduce((sum, v) => sum + (v || 0), 0);
-    return calculateGrossSalary() - deductionsSum;
-  };
-
-  if (loading) {
-    return (
-      <Card>
-        <div className="text-center py-4">
-          <p className="text-secondary">Loading salary structure...</p>\n        </div>
-      </Card>
-    );
-  }
-
-  const grossSalary = calculateGrossSalary();
-  const netSalary = calculateNetSalary();
 
   return (
     <div className="salary-structure">
       {error && <Alert type="error" message={error} onDismiss={() => setError(null)} />}
-      {success && <Alert type="success" message="Salary structure saved successfully" dismissible />}
+      {success && <Alert type="success" message="Salary structure updated successfully" dismissible />}
 
       <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Basic Salary */}
+        {/* Base Salary */}
         <Card className="mb-4">
-          <h5 className="mb-4">Basic Information</h5>
-
+          <h5 className="mb-3">Base Salary</h5>
           <div className="row">
-            <div className="col-12 col-sm-6">
+            <div className="col-md-6">
               <div className="form-group">
-                <label className="form-label">Basic Salary *</label>
+                <label className="form-label">Monthly Base Salary *</label>
                 <Controller
-                  name="basicSalary"
+                  name="baseSalary"
                   control={control}
                   render={({ field }) => (
-                    <input
-                      {...field}
-                      type="number"
-                      className="form-control"
-                      placeholder="Enter basic salary"
-                      min="0"
-                      step="100"
-                    />
+                    <input {...field} type="number" className="form-control" placeholder="0.00" />
                   )}
                 />
-                {errors.basicSalary && (
-                  <p className="form-error" style={{ color: '#EF4444', marginTop: '8px', fontSize: '12px' }}>
-                    {errors.basicSalary.message}
-                  </p>
-                )}
+                {errors.baseSalary && <p className="form-error">{errors.baseSalary.message}</p>}
+              </div>
+            </div>
+            <div className="col-md-6">
+              <div className="form-group">
+                <label className="form-label">Amount</label>
+                <input type="text" className="form-control" value={formatCurrency(baseSalary)} disabled />
               </div>
             </div>
           </div>
@@ -173,126 +105,171 @@ function SalaryStructure({ employeeId, onSave }) {
 
         {/* Allowances */}
         <Card className="mb-4">
-          <h5 className="mb-4">Allowances</h5>
-
-          <div className="row gap-3">
-            {ALLOWANCES.map(allowance => (
-              <div key={allowance.id} className="col-12 col-sm-6 col-lg-4">
-                <div className="form-group">
-                  <label className="form-label">{allowance.label}</label>
-                  <Controller
-                    name={`allowances.${allowance.id}`}
-                    control={control}
-                    defaultValue={0}
-                    render={({ field }) => (
-                      <div className="input-group">
-                        <input
-                          {...field}
-                          type="number"
-                          className="form-control"
-                          placeholder="0"
-                          min="0"
-                          step="100"
-                          onChange={(e) => {
-                            field.onChange(e);
-                            handleAllowanceChange(allowance.id, parseFloat(e.target.value) || 0);
-                          }}
-                        />
-                        <span className="input-group-text">₹</span>
-                      </div>
-                    )}
-                  />
-                </div>
-              </div>
-            ))}
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h5 className="m-0">Allowances</h5>
+            <Button
+              variant="primary"
+              size="sm"
+              type="button"
+              onClick={() => {
+                allowances.push({ name: '', amount: 0 });
+              }}
+            >
+              <FiPlus className="me-2" /> Add Allowance
+            </Button>
           </div>
 
-          <div className="mt-4 p-3 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-            <div className="d-flex justify-content-between">
-              <span className="text-secondary">Total Allowances:</span>
-              <strong>{formatCurrency(Object.values(allowancesValues || {}).reduce((sum, v) => sum + (v || 0), 0))}</strong>
+          {allowances.map((allowance, idx) => (
+            <div key={idx} className="row mb-3 align-items-end">
+              <div className="col-md-6">
+                <label className="form-label">Type</label>
+                <Controller
+                  name={`allowances.${idx}.name`}
+                  control={control}
+                  render={({ field }) => (
+                    <select {...field} className="form-control">
+                      <option>Select allowance</option>
+                      {ALLOWANCES && Object.values(ALLOWANCES).map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  )}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Amount</label>
+                <Controller
+                  name={`allowances.${idx}.amount`}
+                  control={control}
+                  render={({ field }) => (
+                    <input {...field} type="number" className="form-control" placeholder="0.00" />
+                  )}
+                />
+              </div>
+              <div className="col-md-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-danger w-100"
+                  onClick={() => allowances.splice(idx, 1)}
+                >
+                  <FiTrash2 />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <div className="row mt-3 pt-2 border-top">
+            <div className="col-md-6">
+              <strong>Total Allowances:</strong>
+            </div>
+            <div className="col-md-4">
+              <strong>{formatCurrency(totalAllowances)}</strong>
             </div>
           </div>
         </Card>
 
         {/* Deductions */}
         <Card className="mb-4">
-          <h5 className="mb-4">Deductions</h5>
-
-          <div className="row gap-3">
-            {DEDUCTIONS.map(deduction => (
-              <div key={deduction.id} className="col-12 col-sm-6 col-lg-4">
-                <div className="form-group">
-                  <label className="form-label">{deduction.label}</label>
-                  <div className="input-group">
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="0"
-                      min="0"
-                      step="100"
-                      value={deductionsState[deduction.id] || 0}
-                      onChange={(e) => handleDeductionChange(deduction.id, parseFloat(e.target.value) || 0)}
-                    />
-                    <span className="input-group-text">₹</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <h5 className="m-0">Deductions</h5>
+            <Button
+              variant="primary"
+              size="sm"
+              type="button"
+              onClick={() => {
+                deductions.push({ name: '', amount: 0 });
+              }}
+            >
+              <FiPlus className="me-2" /> Add Deduction
+            </Button>
           </div>
 
-          <div className="mt-4 p-3 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-            <div className="d-flex justify-content-between">
-              <span className="text-secondary">Total Deductions:</span>
-              <strong>{formatCurrency(Object.values(deductionsState || {}).reduce((sum, v) => sum + (v || 0), 0))}</strong>
+          {deductions.map((deduction, idx) => (
+            <div key={idx} className="row mb-3 align-items-end">
+              <div className="col-md-6">
+                <label className="form-label">Type</label>
+                <Controller
+                  name={`deductions.${idx}.name`}
+                  control={control}
+                  render={({ field }) => (
+                    <select {...field} className="form-control">
+                      <option>Select deduction</option>
+                      {DEDUCTIONS && Object.values(DEDUCTIONS).map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  )}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Amount</label>
+                <Controller
+                  name={`deductions.${idx}.amount`}
+                  control={control}
+                  render={({ field }) => (
+                    <input {...field} type="number" className="form-control" placeholder="0.00" />
+                  )}
+                />
+              </div>
+              <div className="col-md-2">
+                <button
+                  type="button"
+                  className="btn btn-outline-danger w-100"
+                  onClick={() => deductions.splice(idx, 1)}
+                >
+                  <FiTrash2 />
+                </button>
+              </div>
+            </div>
+          ))}
+
+          <div className="row mt-3 pt-2 border-top">
+            <div className="col-md-6">
+              <strong>Total Deductions:</strong>
+            </div>
+            <div className="col-md-4">
+              <strong>{formatCurrency(totalDeductions)}</strong>
             </div>
           </div>
         </Card>
 
         {/* Salary Summary */}
-        <Card className="mb-4">
-          <h5 className="mb-4">Salary Summary</h5>
-
-          <div className="row gap-3">
-            <div className="col-12 col-sm-6 col-lg-3">
-              <div className="p-3 rounded" style={{ backgroundColor: 'rgba(79, 70, 229, 0.1)' }}>
-                <p className="text-secondary small mb-1">Basic Salary</p>
-                <h5 className="m-0">{formatCurrency(basicSalary)}</h5>
+        <Card className="mb-4 bg-light">
+          <div className="row">
+            <div className="col-md-4">
+              <div className="text-center">
+                <small className="text-muted">Gross Salary</small>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', marginTop: '5px' }}>
+                  {formatCurrency(grossSalary)}
+                </div>
               </div>
             </div>
-            <div className="col-12 col-sm-6 col-lg-3">
-              <div className="p-3 rounded" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
-                <p className="text-secondary small mb-1">Gross Salary</p>
-                <h5 className="m-0" style={{ color: '#10B981' }}>{formatCurrency(grossSalary)}</h5>
+            <div className="col-md-4">
+              <div className="text-center">
+                <small className="text-muted">Total Deductions</small>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', marginTop: '5px', color: '#EF4444' }}>
+                  -{formatCurrency(totalDeductions)}
+                </div>
               </div>
             </div>
-            <div className="col-12 col-sm-6 col-lg-3">
-              <div className="p-3 rounded" style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)' }}>
-                <p className="text-secondary small mb-1">Total Deductions</p>
-                <h5 className="m-0" style={{ color: '#EF4444' }}>
-                  {formatCurrency(Object.values(deductionsState || {}).reduce((sum, v) => sum + (v || 0), 0))}
-                </h5>
-              </div>
-            </div>
-            <div className="col-12 col-sm-6 col-lg-3">
-              <div className="p-3 rounded" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
-                <p className="text-secondary small mb-1">Net Salary</p>
-                <h5 className="m-0" style={{ color: '#3B82F6' }}>{formatCurrency(netSalary)}</h5>
+            <div className="col-md-4">
+              <div className="text-center">
+                <small className="text-muted">Net Salary</small>
+                <div style={{ fontSize: '20px', fontWeight: 'bold', marginTop: '5px', color: '#10B981' }}>
+                  {formatCurrency(netSalary)}
+                </div>
               </div>
             </div>
           </div>
         </Card>
 
-        {/* Submit Button */}
         <div className="d-flex gap-2 justify-content-end">
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={saving}
-            style={{ padding: '10px 20px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
-          >
-            {saving ? 'Saving...' : 'Save Salary Structure'}
-          </button>
+          <Button variant="secondary" onClick={() => reset()} disabled={loading}>
+            Reset
+          </Button>
+          <Button variant="primary" type="submit" disabled={loading}>
+            {loading ? 'Saving...' : 'Save Structure'}
+          </Button>
         </div>
       </form>
     </div>

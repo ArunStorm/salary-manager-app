@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useFetch } from '../hooks/useFetch';
 import { Card, Badge, LoadingSpinner, EmptyState } from '../components/common';
-import { FiUsers, FiDollarSign, FiCalendar, FiTrendingUp, FiAlert } from 'react-icons/fi';
+import { FiUsers, FiDollarSign, FiCalendar, FiTrendingUp, FiAlertCircle } from 'react-icons/fi';
 import { API_ENDPOINTS, ATTENDANCE_STATUS, COLORS } from '../utils/constants';
 import { formatCurrency, displayMonthYear } from '../utils/formatters';
 
@@ -147,7 +147,7 @@ function Dashboard() {
                   borderRadius: '8px',
                 }}
               >
-                <FiAlert size={24} color={COLORS.WARNING} />
+                <FiAlertCircle size={24} color="#F59E0B" />
               </div>
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Awaiting approval</div>

@@ -1,82 +1,61 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
-import * as yup from 'yup';
 import { yupResolver } from '@hookform/resolvers/yup';
-import { Alert } from '../common';
-import { API_ENDPOINTS, PAYROLL_STATUS } from '../../utils/constants';
+import * as yup from 'yup';
+import { Card, Alert } from '../common';
 import { api } from '../../services/api';
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { API_ENDPOINTS } from '../../utils/constants';
+import { formatCurrency } from '../../utils/formatters';
 import moment from 'moment';
 
-const salaryFormSchema = yup.object({
+const salarySchema = yup.object({
   month: yup.string().required('Month is required'),
-  year: yup.number().required('Year is required').min(2020).max(2100),
-  workingDays: yup.number().required('Working days required').min(0).max(31),
-  daysPresent: yup.number().required('Days present required').min(0).max(31),
-  notes: yup.string(),
+  year: yup.number().required('Year is required'),
+  workingDays: yup.number().positive('Must be positive'),
+  daysPresent: yup.number().positive('Must be positive'),
 });
 
-function SalaryForm({ employeeId, onSuccess, onCancel, existingRecord }) {
+function SalaryForm({ employee, onSuccess, onCancel }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
-  const [salaryDetails, setSalaryDetails] = useState(null);
+  const [salaryPreview, setSalaryPreview] = useState(null);
 
-  const {
-    control,
-    handleSubmit,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm({
-    resolver: yupResolver(salaryFormSchema),
+  const { control, handleSubmit, watch, formState: { errors } } = useForm({
+    resolver: yupResolver(salarySchema),
     defaultValues: {
-      month: existingRecord?.month || moment().format('MM'),
-      year: existingRecord?.year || moment().year(),
-      workingDays: existingRecord?.workingDays || 22,
-      daysPresent: existingRecord?.daysPresent || 22,
-      notes: existingRecord?.notes || '',
+      month: moment().format('MM'),
+      year: moment().year(),
+      workingDays: 26,
+      daysPresent: 26,
     },
   });
 
-  const workingDays = watch('workingDays');
-  const daysPresent = watch('daysPresent');
+  const workingDays = watch('workingDays') || 26;
+  const daysPresent = watch('daysPresent') || 26;
 
-  useEffect(() => {
-    if (employeeId) {
-      loadSalaryStructure();
-    }
-  }, [employeeId]);
+  const handlePreview = (data) => {
+    const baseSalary = employee?.baseSalary || 0;
+    const allowances = employee?.allowances || [];
+    const deductions = employee?.deductions || [];
 
-  const loadSalaryStructure = async () => {
-    try {
-      const response = await api.get(`${API_ENDPOINTS.SALARY}/structure/${employeeId}`);
-      setSalaryDetails(response?.data);
-    } catch (err) {
-      console.error('Error loading salary structure:', err);
-    }
-  };
+    const totalAllowances = allowances.reduce((sum, a) => sum + (a?.amount || 0), 0);
+    const totalDeductions = deductions.reduce((sum, d) => sum + (d?.amount || 0), 0);
 
-  const calculateSalary = (values) => {
-    if (!salaryDetails) return null;
+    const grossSalary = baseSalary + totalAllowances;
+    const attendancePercentage = (daysPresent / workingDays) * 100;
+    const calculatedSalary = (grossSalary * attendancePercentage) / 100;
+    const netSalary = calculatedSalary - totalDeductions;
 
-    const basicPerDay = (salaryDetails.basicSalary || 0) / (workingDays || 22);
-    const earnedBasic = daysPresent * basicPerDay;
-
-    const allowances = Object.values(salaryDetails.allowances || {}).reduce((sum, v) => sum + (v || 0), 0);
-    const grossSalary = earnedBasic + allowances;
-
-    const deductions = Object.values(salaryDetails.deductions || {}).reduce((sum, v) => sum + (v || 0), 0);
-    const netSalary = grossSalary - deductions;
-
-    return {
-      basicSalary: salaryDetails.basicSalary,
-      earnedBasic,
-      allowances,
+    setSalaryPreview({
+      baseSalary,
+      totalAllowances,
       grossSalary,
-      deductions,
+      attendancePercentage: attendancePercentage.toFixed(2),
+      calculatedSalary,
+      totalDeductions,
       netSalary,
-    };
+    });
   };
 
   const onSubmit = async (data) => {
@@ -85,54 +64,39 @@ function SalaryForm({ employeeId, onSuccess, onCancel, existingRecord }) {
     setSuccess(false);
 
     try {
-      const salaryCalc = calculateSalary(data);
-
       const payload = {
-        employeeId,
-        month: parseInt(data.month),
+        employeeId: employee.id,
+        month: data.month,
         year: data.year,
         workingDays: data.workingDays,
         daysPresent: data.daysPresent,
-        basicSalary: salaryCalc.basicSalary,
-        earnedBasic: salaryCalc.earnedBasic,
-        allowances: salaryCalc.allowances,
-        deductions: salaryCalc.deductions,
-        grossSalary: salaryCalc.grossSalary,
-        netSalary: salaryCalc.netSalary,
-        status: PAYROLL_STATUS.PENDING,
-        notes: data.notes,
+        ...salaryPreview,
+        status: 'pending',
       };
 
-      if (existingRecord?.id) {
-        await api.put(`${API_ENDPOINTS.SALARY}/${existingRecord.id}`, payload);
-      } else {
-        await api.post(API_ENDPOINTS.SALARY, payload);
-      }
-
+      await api.post(API_ENDPOINTS.SALARY, payload);
       setSuccess(true);
-      reset();
       setTimeout(() => {
         if (onSuccess) onSuccess();
-      }, 1000);
+      }, 1500);
     } catch (err) {
-      setError(err.message || 'Failed to save salary record');
+      setError(err.message || 'Failed to create salary record');
     } finally {
       setLoading(false);
     }
   };
 
-  const salary = calculateSalary();
-  const attendancePercentage = workingDays > 0 ? Math.round((daysPresent / workingDays) * 100) : 0;
-
   return (
     <div className="salary-form">
       {error && <Alert type="error" message={error} onDismiss={() => setError(null)} />}
-      {success && <Alert type="success" message="Salary record saved successfully" dismissible />}
+      {success && <Alert type="success" message="Salary record created successfully" dismissible />}
 
-      <form onSubmit={handleSubmit(onSubmit)}>
-        {/* Month & Year */}
-        <div className="row gap-3 mb-4">
-          <div className="col-12 col-sm-6">
+      <form onSubmit={handleSubmit((data) => {
+        handlePreview(data);
+        onSubmit(data);
+      })}>
+        <div className="row mb-3">
+          <div className="col-md-6">
             <div className="form-group">
               <label className="form-label">Month *</label>
               <Controller
@@ -140,9 +104,9 @@ function SalaryForm({ employeeId, onSuccess, onCancel, existingRecord }) {
                 control={control}
                 render={({ field }) => (
                   <select {...field} className="form-control">
-                    {[...Array(12)].map((_, i) => (
-                      <option key={i + 1} value={String(i + 1).padStart(2, '0')}>
-                        {moment().month(i).format('MMMM')}
+                    {moment.months().map((month, idx) => (
+                      <option key={idx} value={String(idx + 1).padStart(2, '0')}>
+                        {month}
                       </option>
                     ))}
                   </select>
@@ -151,44 +115,43 @@ function SalaryForm({ employeeId, onSuccess, onCancel, existingRecord }) {
               {errors.month && <p className="form-error">{errors.month.message}</p>}
             </div>
           </div>
-          <div className="col-12 col-sm-6">
+
+          <div className="col-md-6">
             <div className="form-group">
               <label className="form-label">Year *</label>
               <Controller
                 name="year"
                 control={control}
                 render={({ field }) => (
-                  <input {...field} type="number" className="form-control" min="2020" max="2100" />
+                  <input {...field} type="number" className="form-control" />
                 )}
               />
               {errors.year && <p className="form-error">{errors.year.message}</p>}
             </div>
           </div>
-        </div>
 
-        {/* Attendance */}
-        <div className="row gap-3 mb-4">
-          <div className="col-12 col-sm-6">
+          <div className="col-md-6">
             <div className="form-group">
               <label className="form-label">Working Days *</label>
               <Controller
                 name="workingDays"
                 control={control}
                 render={({ field }) => (
-                  <input {...field} type="number" className="form-control" min="0" max="31" />
+                  <input {...field} type="number" className="form-control" />
                 )}
               />
               {errors.workingDays && <p className="form-error">{errors.workingDays.message}</p>}
             </div>
           </div>
-          <div className="col-12 col-sm-6">
+
+          <div className="col-md-6">
             <div className="form-group">
               <label className="form-label">Days Present *</label>
               <Controller
                 name="daysPresent"
                 control={control}
                 render={({ field }) => (
-                  <input {...field} type="number" className="form-control" min="0" max="31" />
+                  <input {...field} type="number" className="form-control" />
                 )}
               />
               {errors.daysPresent && <p className="form-error">{errors.daysPresent.message}</p>}
@@ -196,98 +159,58 @@ function SalaryForm({ employeeId, onSuccess, onCancel, existingRecord }) {
           </div>
         </div>
 
-        {/* Attendance Percentage Info */}
-        {workingDays > 0 && (
-          <div className="mb-4 p-3 rounded" style={{ backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
-            <p className="m-0 text-small">
-              Attendance: <strong>{attendancePercentage}%</strong> ({daysPresent}/{workingDays} days)
-            </p>
-          </div>
-        )}
-
-        {/* Salary Breakdown */}
-        {salary && salaryDetails && (
-          <>
-            <div className="mb-4">
-              <h6 className="text-secondary mb-3">Salary Breakdown</h6>
-              <div className="row gap-3">
-                <div className="col-12 col-sm-6 col-lg-4">
-                  <div className="p-3 rounded" style={{ backgroundColor: 'var(--bg-tertiary)' }}>
-                    <p className="text-secondary small mb-1">Basic Salary/Day</p>
-                    <h6 className="m-0">{formatCurrency((salaryDetails.basicSalary || 0) / (workingDays || 22))}</h6>
-                  </div>
+        {salaryPreview && (
+          <Card className="mb-4 bg-light">
+            <h5 className="mb-3">Salary Breakdown</h5>
+            <div className="row">
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <small className="text-muted">Base Salary</small>
+                  <div className="h6">{formatCurrency(salaryPreview.baseSalary)}</div>
                 </div>
-                <div className="col-12 col-sm-6 col-lg-4">
-                  <div className="p-3 rounded" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}>
-                    <p className="text-secondary small mb-1">Earned Basic</p>
-                    <h6 className="m-0" style={{ color: '#10B981' }}>{formatCurrency(salary.earnedBasic)}</h6>
-                  </div>
+                <div className="mb-3">
+                  <small className="text-muted">Allowances</small>
+                  <div className="h6">{formatCurrency(salaryPreview.totalAllowances)}</div>
                 </div>
-                <div className="col-12 col-sm-6 col-lg-4">
-                  <div className="p-3 rounded" style={{ backgroundColor: 'rgba(79, 70, 229, 0.1)' }}>
-                    <p className="text-secondary small mb-1">Allowances</p>
-                    <h6 className="m-0" style={{ color: '#4F46E5' }}>{formatCurrency(salary.allowances)}</h6>
+                <div className="mb-3">
+                  <small className="text-muted">Gross Salary</small>
+                  <div className="h6 fw-bold">{formatCurrency(salaryPreview.grossSalary)}</div>
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="mb-3">
+                  <small className="text-muted">Attendance %</small>
+                  <div className="h6">{salaryPreview.attendancePercentage}%</div>
+                </div>
+                <div className="mb-3">
+                  <small className="text-muted">Calculated Salary</small>
+                  <div className="h6">{formatCurrency(salaryPreview.calculatedSalary)}</div>
+                </div>
+                <div className="mb-3">
+                  <small className="text-muted">Deductions</small>
+                  <div className="h6">-{formatCurrency(salaryPreview.totalDeductions)}</div>
+                </div>
+              </div>
+              <div className="col-12 border-top pt-3 mt-3">
+                <div className="d-flex justify-content-between">
+                  <strong>Net Salary</strong>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#10B981' }}>
+                    {formatCurrency(salaryPreview.netSalary)}
                   </div>
                 </div>
               </div>
             </div>
-
-            <div className="mb-4 p-4 rounded" style={{ backgroundColor: 'rgba(79, 70, 229, 0.1)', border: '2px solid var(--color-primary)' }}>
-              <div className="row text-center gap-3">
-                <div className="col-12 col-sm-4">
-                  <p className="text-secondary small mb-1">Gross Salary</p>
-                  <h5 className="m-0" style={{ color: '#4F46E5' }}>{formatCurrency(salary.grossSalary)}</h5>
-                </div>
-                <div className="col-12 col-sm-4">
-                  <p className="text-secondary small mb-1">Deductions</p>
-                  <h5 className="m-0" style={{ color: '#EF4444' }}>−{formatCurrency(salary.deductions)}</h5>
-                </div>
-                <div className="col-12 col-sm-4">
-                  <p className="text-secondary small mb-1">Net Salary</p>
-                  <h5 className="m-0" style={{ color: '#10B981', fontWeight: '700' }}>{formatCurrency(salary.netSalary)}</h5>
-                </div>
-              </div>
-            </div>
-          </>
+          </Card>
         )}
 
-        {/* Notes */}
-        <div className="form-group mb-4">
-          <label className="form-label">Notes</label>
-          <Controller
-            name="notes"
-            control={control}
-            render={({ field }) => (
-              <textarea
-                {...field}
-                className="form-control"
-                rows={2}
-                placeholder="Optional notes for this salary record"
-                style={{ borderRadius: '6px', border: '1px solid var(--border-color)', fontFamily: 'inherit' }}
-              />
-            )}
-          />
-        </div>
-
-        {/* Form Actions */}
         <div className="d-flex gap-2 justify-content-end">
           {onCancel && (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={onCancel}
-              disabled={loading}
-              style={{ padding: '10px 16px', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)', borderRadius: '6px', cursor: 'pointer' }}
-            >
+            <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={loading}>
               Cancel
             </button>
           )}
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ padding: '10px 16px', backgroundColor: 'var(--color-primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '500' }}
-          >
-            {loading ? 'Saving...' : existingRecord ? 'Update Salary' : 'Create Salary Record'}
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? 'Creating...' : 'Create Salary Record'}
           </button>
         </div>
       </form>

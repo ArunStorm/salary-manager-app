@@ -1,1 +1,153 @@
-import { useEffect, useState } from 'react';\nimport { useFetch } from '../hooks/useFetch';\nimport { Card, Select, LoadingSpinner, Modal } from '../components/common';\nimport { Calendar, AttendanceForm, AttendanceList } from '../components/attendance';\nimport { API_ENDPOINTS } from '../utils/constants';\nimport { api } from '../services/api';\nimport moment from 'moment';\nimport { FiChevronLeft, FiChevronRight } from 'react-icons/fi';\n\nfunction Attendance() {\n  const [employees, setEmployees] = useState([]);\n  const [selectedEmployee, setSelectedEmployee] = useState(null);\n  const [selectedMonth, setSelectedMonth] = useState(moment());\n  const [attendanceData, setAttendanceData] = useState([]);\n  const [showAttendanceForm, setShowAttendanceForm] = useState(false);\n  const [selectedDate, setSelectedDate] = useState(null);\n  const [selectedDateRecord, setSelectedDateRecord] = useState(null);\n  const [refreshKey, setRefreshKey] = useState(0);\n  const employeesFetch = useFetch();\n  const attendanceFetch = useFetch();\n\n  useEffect(() => {\n    loadEmployees();\n  }, []);\n\n  const loadEmployees = async () => {\n    try {\n      const response = await employeesFetch.execute('GET', API_ENDPOINTS.EMPLOYEES);\n      const emps = response?.data || [];\n      setEmployees(emps);\n      if (emps.length > 0) {\n        setSelectedEmployee(emps[0]);\n      }\n    } catch (error) {\n      console.error('Error loading employees:', error);\n    }\n  };\n\n  useEffect(() => {\n    if (selectedEmployee) {\n      loadAttendanceForMonth();\n    }\n  }, [selectedEmployee, selectedMonth]);\n\n  const loadAttendanceForMonth = async () => {\n    if (!selectedEmployee) return;\n    try {\n      const monthYear = selectedMonth.format('YYYY-MM');\n      const response = await attendanceFetch.execute(\n        'GET',\n        `${API_ENDPOINTS.ATTENDANCE}?employeeId=${selectedEmployee.id}&month=${monthYear}`\n      );\n      setAttendanceData(response?.data || []);\n    } catch (error) {\n      console.error('Error loading attendance:', error);\n    }\n  };\n\n  const handleDateSelect = (date, record) => {\n    setSelectedDate(date);\n    setSelectedDateRecord(record);\n    setShowAttendanceForm(true);\n  };\n\n  const handleMonthPrev = () => {\n    setSelectedMonth(selectedMonth.clone().subtract(1, 'month'));\n  };\n\n  const handleMonthNext = () => {\n    setSelectedMonth(selectedMonth.clone().add(1, 'month'));\n  };\n\n  const handleFormSuccess = () => {\n    setShowAttendanceForm(false);\n    setSelectedDate(null);\n    setSelectedDateRecord(null);\n    loadAttendanceForMonth();\n  };\n\n  if (employeesFetch.loading && employees.length === 0) {\n    return <LoadingSpinner text=\"Loading employees...\" />;\n  }\n\n  return (\n    <div className=\"attendance-page\">\n      {/* Page Header */}\n      <div className=\"row mb-4\">\n        <div className=\"col-12\">\n          <h3 className=\"m-0\">Attendance Management</h3>\n          <p className=\"text-secondary small mt-1\">Mark and track employee attendance</p>\n        </div>\n      </div>\n\n      {/* Employee Selection */}\n      <div className=\"row mb-4\">\n        <div className=\"col-12 col-lg-6\">\n          <Card>\n            <label className=\"form-label\">Select Employee</label>\n            <select\n              className=\"form-control\"\n              value={selectedEmployee?.id || ''}\n              onChange={(e) => {\n                const emp = employees.find(e => e.id === e.target.value);\n                setSelectedEmployee(emp);\n              }}\n            >\n              {employees.map(emp => (\n                <option key={emp.id} value={emp.id}>\n                  {emp.name} ({emp.department})\n                </option>\n              ))}\n            </select>\n          </Card>\n        </div>\n      </div>\n\n      {/* Calendar and List Layout */}\n      {selectedEmployee && (\n        <div className=\"row gap-4\">\n          {/* Calendar Section */}\n          <div className=\"col-12 col-lg-6\">\n            <Calendar\n              attendanceData={attendanceData}\n              onDateSelect={handleDateSelect}\n              selectedMonth={selectedMonth}\n            />\n          </div>\n\n          {/* Attendance List Section */}\n          <div className=\"col-12 col-lg-6\">\n            <AttendanceList\n              key={refreshKey}\n              employeeId={selectedEmployee.id}\n              month={selectedMonth}\n              onRefresh={() => setRefreshKey(refreshKey + 1)}\n            />\n          </div>\n        </div>\n      )}\n\n      {/* Attendance Form Modal */}\n      {showAttendanceForm && selectedDate && (\n        <Modal\n          title={selectedDateRecord ? 'Edit Attendance' : 'Mark Attendance'}\n          onClose={() => {\n            setShowAttendanceForm(false);\n            setSelectedDate(null);\n            setSelectedDateRecord(null);\n          }}\n          size=\"lg\"\n        >\n          <AttendanceForm\n            employeeId={selectedEmployee.id}\n            date={selectedDate}\n            existingRecord={selectedDateRecord}\n            onSuccess={handleFormSuccess}\n            onCancel={() => {\n              setShowAttendanceForm(false);\n              setSelectedDate(null);\n              setSelectedDateRecord(null);\n            }}\n          />\n        </Modal>\n      )}\n    </div>\n  );\n}\n\nexport default Attendance;
+import { useEffect, useState } from 'react';
+import { useFetch } from '../hooks/useFetch';
+import { Card, LoadingSpinner, Modal } from '../components/common';
+import { Calendar, AttendanceForm, AttendanceList } from '../components/attendance';
+import { API_ENDPOINTS } from '../utils/constants';
+import moment from 'moment';
+
+function Attendance() {
+  const [employees, setEmployees] = useState([]);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(moment());
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [showAttendanceForm, setShowAttendanceForm] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedDateRecord, setSelectedDateRecord] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const employeesFetch = useFetch();
+  const attendanceFetch = useFetch();
+
+  useEffect(() => {
+    loadEmployees();
+  }, []);
+
+  const loadEmployees = async () => {
+    try {
+      const response = await employeesFetch.execute('GET', API_ENDPOINTS.EMPLOYEES);
+      const emps = response?.data || [];
+      setEmployees(emps);
+      if (emps.length > 0) {
+        setSelectedEmployee(emps[0]);
+      }
+    } catch (error) {
+      console.error('Error loading employees:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedEmployee) {
+      loadAttendanceForMonth();
+    }
+  }, [selectedEmployee, selectedMonth]);
+
+  const loadAttendanceForMonth = async () => {
+    if (!selectedEmployee) return;
+    try {
+      const monthYear = selectedMonth.format('YYYY-MM');
+      const response = await attendanceFetch.execute(
+        'GET',
+        `${API_ENDPOINTS.ATTENDANCE}?employeeId=${selectedEmployee.id}&month=${monthYear}`
+      );
+      setAttendanceData(response?.data || []);
+    } catch (error) {
+      console.error('Error loading attendance:', error);
+    }
+  };
+
+  const handleDateSelect = (date, record) => {
+    setSelectedDate(date);
+    setSelectedDateRecord(record);
+    setShowAttendanceForm(true);
+  };
+
+  const handleFormSuccess = () => {
+    setShowAttendanceForm(false);
+    setSelectedDate(null);
+    setSelectedDateRecord(null);
+    loadAttendanceForMonth();
+  };
+
+  if (employeesFetch.loading && employees.length === 0) {
+    return <LoadingSpinner text="Loading employees..." />;
+  }
+
+  return (
+    <div className="attendance-page">
+      <div className="row mb-4">
+        <div className="col-12">
+          <h3 className="m-0">Attendance Management</h3>
+          <p className="text-secondary small mt-1">Mark and track employee attendance</p>
+        </div>
+      </div>
+
+      <div className="row mb-4">
+        <div className="col-12 col-lg-6">
+          <Card>
+            <label className="form-label">Select Employee</label>
+            <select
+              className="form-control"
+              value={selectedEmployee?.id || ''}
+              onChange={(e) => {
+                const emp = employees.find(emp => emp.id === e.target.value);
+                setSelectedEmployee(emp);
+              }}
+            >
+              {employees.map(emp => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name} ({emp.department})
+                </option>
+              ))}
+            </select>
+          </Card>
+        </div>
+      </div>
+
+      {selectedEmployee && (
+        <div className="row gap-4">
+          <div className="col-12 col-lg-6">
+            <Calendar
+              attendanceData={attendanceData}
+              onDateSelect={handleDateSelect}
+              selectedMonth={selectedMonth}
+            />
+          </div>
+
+          <div className="col-12 col-lg-6">
+            <AttendanceList
+              key={refreshKey}
+              employeeId={selectedEmployee.id}
+              month={selectedMonth}
+              onRefresh={() => setRefreshKey(refreshKey + 1)}
+            />
+          </div>
+        </div>
+      )}
+
+      {showAttendanceForm && selectedDate && (
+        <Modal
+          title={selectedDateRecord ? 'Edit Attendance' : 'Mark Attendance'}
+          onClose={() => {
+            setShowAttendanceForm(false);
+            setSelectedDate(null);
+            setSelectedDateRecord(null);
+          }}
+          size="lg"
+        >
+          <AttendanceForm
+            employeeId={selectedEmployee.id}
+            date={selectedDate}
+            existingRecord={selectedDateRecord}
+            onSuccess={handleFormSuccess}
+            onCancel={() => {
+              setShowAttendanceForm(false);
+              setSelectedDate(null);
+              setSelectedDateRecord(null);
+            }}
+          />
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+export default Attendance;
