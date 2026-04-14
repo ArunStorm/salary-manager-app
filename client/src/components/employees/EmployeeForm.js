@@ -7,9 +7,9 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { Button, Alert } from './common';
-import { DEPARTMENTS, VALIDATION } from '../utils/constants';
-import { validateEmployeeForm } from '../utils/validators';
+import { Button, Alert } from '../common';
+import { DEPARTMENTS, VALIDATION } from '../../utils/constants';
+import { validateEmployeeForm } from '../../utils/validators';
 
 const schema = yup.object().shape({
   name: yup.string().required('Name is required').min(2, 'Name must be at least 2 characters'),
