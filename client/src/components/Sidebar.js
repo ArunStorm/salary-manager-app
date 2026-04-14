@@ -31,7 +31,7 @@ function Sidebar() {
       <nav className="p-3">
         <ul className="list-unstyled">
           {navigation.map((item) => (
-            <li key={item.path} className="mb-2">
+            <li key={item.path} className="mb-2"> 
               <Link
                 to={item.path}
                 className={`d-flex align-items-center gap-3 px-3 py-2 rounded text-decoration-none ${
