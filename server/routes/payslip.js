@@ -87,7 +87,10 @@ router.get('/:employeeId/:monthYear', async (req, res, next) => {
     // Add allowances
     if (salary.allowances && Object.keys(salary.allowances).length > 0) {
       Object.entries(salary.allowances).forEach(([key, value]) => {
-        tableData.push([key.charAt(0).toUpperCase() + key.slice(1), value.toLocaleString('en-IN')];
+        tableData.push([
+          key.charAt(0).toUpperCase() + key.slice(1),
+          value.toLocaleString('en-IN')
+        ]);
       });
     }
 
